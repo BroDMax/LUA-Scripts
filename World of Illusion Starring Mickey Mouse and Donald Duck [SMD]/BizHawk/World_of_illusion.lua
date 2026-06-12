@@ -1,9 +1,11 @@
 local frame_counter = 0
-local max_global = 0
-local graph = {}
+local max_global1 = 0
+local max_global2 = 0
+local graph1 = {}
 local graph2 = {}
+local graphCarpet = {}
 
-WIDTH = 320
+local WIDTH = 320
 
 COLOR_WHITE			= 0xFFFFFFFF
 COLOR_RED			= 0xFFFF0000
@@ -15,23 +17,40 @@ WORLD_CLOUD = 2
 WORLD_WATER = 3
 
 function foo()
-
+	local count_players			= mainmemory.read_u8(0xFFD8)
 	local speed_player1			= mainmemory.read_s16_be(0xA019)
+	local speed_player2			= mainmemory.read_s16_be(0xA099)
+	if count_players > 1 then
+		WIDTH = 320 / 2
+	else
+		WIDTH = 320
+	end
 	local speed_magic_carpet	= mainmemory.read_s16_be(0x9059)
 	local world					= mainmemory.read_s16_be(0xFFDA)
 	local act_id				= mainmemory.read_s16_be(0xFFDC)
 	
-	if speed_player1 > max_global then
-		max_global = speed_player1
+	if speed_player1 > max_global1 then
+		max_global1 = speed_player1
+	end
+	if count_players > 1 and speed_player2 > max_global2 then
+		max_global2 = speed_player2
 	end
 
 	gui.drawRectangle(0, 0, WIDTH, 50, COLOR_BACKGROUND, COLOR_BACKGROUND)
+	if count_players > 1 then
+		gui.drawRectangle(WIDTH, 0, WIDTH, 50, COLOR_BACKGROUND, COLOR_BACKGROUND)
+		gui.drawLine(WIDTH, 0, WIDTH, 50, COLOR_WHITE)
+	end
 
-	graph[frame_counter] = speed_player1
-	graph2[frame_counter] = speed_magic_carpet
+	graph1[frame_counter] = speed_player1
+	if count_players > 1 then
+		graph2[frame_counter] = speed_player2
+	end
+	graphCarpet[frame_counter] = speed_magic_carpet
 
 	local pointer = frame_counter
-	local max_local = 0
+	local max_local1 = 0
+	local max_local2 = 0
 
 	-- Уровень на ковре-самолете
 	if world == WORLD_CLOUD and act_id == 0 then
@@ -41,7 +60,7 @@ function foo()
 				pointer = WIDTH
 			end
 
-			drawMagicCarpetSpeed(graph2[pointer], i)
+			drawMagicCarpetSpeed(graphCarpet[pointer], i)
 
 			pointer = pointer - 1
 		end
@@ -54,7 +73,10 @@ function foo()
 				pointer = WIDTH
 			end
 
-			drawPlayer1Swiming(graph[pointer], i)
+			drawPlayer1Swiming(graph1[pointer], i)
+			if count_players > 1 then
+				drawPlayer2Swiming(graph2[pointer], i)
+			end
 
 			pointer = pointer - 1
 		end
@@ -67,18 +89,34 @@ function foo()
 				pointer = WIDTH
 			end
 
-			if graph[pointer] > max_local then
-				max_local = graph[pointer]
+			if graph1[pointer] > max_local1 then
+				max_local1 = graph1[pointer]
+			end
+			if count_players > 1 and graph2[pointer] > max_local2 then
+				max_local2 = graph2[pointer]
 			end
 
-			drawPlayer1Speed(graph[pointer], i)
+			drawPlayer1Speed(graph1[pointer], i)
+			if count_players > 1 then
+				drawPlayer2Speed(graph2[pointer], i)
+			end
 
 			pointer = pointer - 1
 		end
 
 		local screenWidth = client.screenwidth()
-		gui.text(screenWidth - 160, 0, "global max: " .. max_global)
-		gui.text(screenWidth - 90, 15, "max: " .. max_local)
+		if count_players > 1 then
+			gui.text(screenWidth / 2 - 190, 0, "global max 1p: " .. max_global1)
+			gui.text(screenWidth / 2 - 120, 15, "max 1p: " .. max_local1)
+			gui.text(screenWidth / 2 - 160, 30, "Current 1p: " .. speed_player1)
+			gui.text(screenWidth - 190, 0, "global max 2p: " .. max_global2)
+			gui.text(screenWidth - 120, 15, "max 2p: " .. max_local2)
+			gui.text(screenWidth - 160, 30, "Current 2p: " .. speed_player2)
+		else
+			gui.text(screenWidth - 190, 0, "global max 1p: " .. max_global1)
+			gui.text(screenWidth - 120, 15, "max 1p: " .. max_local1)
+			gui.text(screenWidth - 160, 30, "Current 1p: " .. speed_player1)
+		end
 	end
 	
 	-- Проверяем счетчик кадров
@@ -92,11 +130,12 @@ end
 
 function init()
 	for i = 0, WIDTH do
-		graph[i] = 0
+		graph1[i] = 0
+		graph2[i] = 0
 	end
 
 	for i = 0, WIDTH do
-		graph2[i] = 0
+		graphCarpet[i] = 0
 	end
 end
 
@@ -119,6 +158,25 @@ function drawPlayer1Speed(value, x)
 	gui.drawPixel(x, 50 - y, color)
 end
 
+function drawPlayer2Speed(value, x)
+	if value < 0 then
+		value = value * -1
+	end
+
+	local y = value / 32
+	local color = COLOR_WHITE
+
+	if value >= 1024 then
+		color = COLOR_RED
+	elseif value >= 512 then
+		color = COLOR_GREEN
+	elseif value >= 480 then
+		color = COLOR_YELLOW
+	end
+	
+	gui.drawPixel(x + WIDTH, 50 - y, color)
+end
+
 function drawPlayer1Swiming(value, x)
 	if value < 0 then
 		value = value * -1
@@ -134,6 +192,23 @@ function drawPlayer1Swiming(value, x)
 	end
 	
 	gui.drawPixel(x, 50 - y, color)
+end
+
+function drawPlayer2Swiming(value, x)
+	if value < 0 then
+		value = value * -1
+	end
+
+	local y = value / 32
+	local color = COLOR_WHITE
+
+	if value > 288 then
+		color = COLOR_RED
+	elseif value == 288 then
+		color = COLOR_GREEN
+	end
+	
+	gui.drawPixel(x + WIDTH, 50 - y, color)
 end
 
 function drawMagicCarpetSpeed(value, x)
